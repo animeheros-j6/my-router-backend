@@ -3,9 +3,6 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 // 1. Serving the Dashboard UI
 app.get('/', (req, res) => {
     res.send(`
@@ -16,7 +13,7 @@ app.get('/', (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Dynamic Link Provisioning Utility</title>
         <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #e0e0e0; max-width: 600px; margin: 40px auto; padding: 20px; }
+            body { font-family: 'Segoe UI', sans-serif; background-color: #121212; color: #e0e0e0; max-width: 600px; margin: 40px auto; padding: 20px; }
             h1 { color: #00ff88; text-align: center; font-size: 24px; }
             .card { background: #1e1e1e; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; }
             label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
@@ -54,15 +51,19 @@ app.get('/', (req, res) => {
             }
             document.getElementById('genForm').addEventListener('submit', (e) => {
                 e.preventDefault();
-                const target = document.getElementById('targetIp').value.trim();
+                let target = document.getElementById('targetIp').value.trim();
                 const count = Math.min(parseInt(document.getElementById('linkCount').value), 10000);
                 const base = window.location.origin;
+                
+                // Clean up any http tags so it formats right
+                target = target.replace('https://', '').replace('http://', '');
                 
                 let txt = "=== PROVISIONED LINKS ===\\n\\n";
                 const frag = document.createDocumentFragment();
                 
                 for(let i=0; i<count; i++) {
-                    const lnk = base + "/route/" + getRandomString(6) + "/" + getRandomString(6) + "?dest=" + btoa(target).replace(/=/g,"");
+                    // Generate clean paths pointing directly to the target routing path parameter
+                    const lnk = base + "/go/" + target + "?bypass=" + getRandomString(8);
                     txt += (i+1) + ". " + lnk + "\\n";
                     if(i < 100) {
                         const d = document.createElement('div'); d.className = 'link-item';
@@ -81,44 +82,25 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. Real-Time Traffic Routing Engine Middleware (Fixed Infinite Loop)
-app.use('/route/:fld/:file', (req, res, next) => {
-    const encodedDest = req.query.dest;
-    if (!encodedDest) return res.status(400).send("Missing target routing parameters.");
-    
-    try {
-        // Decode the target destination securely
-        let target = Buffer.from(encodedDest, 'base64').toString('ascii');
-        if (!target.startsWith('http')) target = 'https://' + target;
+// 2. Real-Time Traffic Routing Engine Middleware (Clean Direct Proxy Pipeline)
+app.use('/go/:targetIp', (req, res, next) => {
+    let target = req.params.targetIp;
+    if (!target.startsWith('http')) target = 'https://' + target;
 
-        // Establish the secure server-to-server data pipe
-        createProxyMiddleware({
-            target: target,
-            changeOrigin: true,
-            secure: false, // Prevents SSL mismatches when using raw IP targets
-            logLevel: 'silent',
-            onError: (err, req, res) => {
-                res.status(502).send("Target server connection timeout or host offline.");
-            }
-        })(req, res, next);
-    } catch (e) {
-        res.status(400).send("Invalid configuration string.");
-    }
+    createProxyMiddleware({
+        target: target,
+        changeOrigin: true,
+        secure: false,
+        logLevel: 'silent',
+        pathRewrite: { '^/go/[^/]+': '' }, // Strips the proxy prefix out cleanly
+        onError: (err, req, res) => res.status(502).send("Target server connection timeout or host offline.")
+    })(req, res, next);
 });
 
-// Dynamic port binding to prevent conflicts
-const server = app.listen(PORT, () => {
-    console.log(`Server successfully active on port ${PORT}`);
-});
-
+// Dynamic port fallback handler
+const server = app.listen(PORT, () => console.log(`Server live on port ${PORT}`));
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-        console.log('Port conflict detected. Automatically switching to alternative backup port...');
-        setTimeout(() => {
-            server.close();
-            app.listen(PORT + 1, () => {
-                console.log(`Server successfully active on backup port ${PORT + 1}`);
-            });
-        }, 1000);
+        setTimeout(() => { server.close(); app.listen(PORT + 1); }, 1000);
     }
 });
