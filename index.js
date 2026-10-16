@@ -3,7 +3,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 1. Serving the Dashboard UI
+// 1. Serving the Dashboard UI Engine
 app.get('/', (req, res) => {
     res.send(`
     <!DOCTYPE html>
@@ -55,15 +55,14 @@ app.get('/', (req, res) => {
                 const count = Math.min(parseInt(document.getElementById('linkCount').value), 10000);
                 const base = window.location.origin;
                 
-                // Clean up any http tags so it formats right
                 target = target.replace('https://', '').replace('http://', '');
                 
                 let txt = "=== PROVISIONED LINKS ===\\n\\n";
                 const frag = document.createDocumentFragment();
                 
                 for(let i=0; i<count; i++) {
-                    // Generate clean paths pointing directly to the target routing path parameter
-                    const lnk = base + "/go/" + target + "?bypass=" + getRandomString(8);
+                    // Generates clean parameters using standard routing paths
+                    const lnk = base + "/service?url=" + encodeURIComponent("https://" + target) + "&id=" + getRandomString(6);
                     txt += (i+1) + ". " + lnk + "\\n";
                     if(i < 100) {
                         const d = document.createElement('div'); d.className = 'link-item';
@@ -82,22 +81,28 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. Real-Time Traffic Routing Engine Middleware (Clean Direct Proxy Pipeline)
-app.use('/go/:targetIp', (req, res, next) => {
-    let target = req.params.targetIp;
-    if (!target.startsWith('http')) target = 'https://' + target;
+// 2. Real-Time Traffic Routing Engine (Clean Asset Re-Mapping Configuration)
+app.use('/service', (req, res, next) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send("Missing target routing URL configuration parameter.");
 
     createProxyMiddleware({
-        target: target,
+        target: targetUrl,
         changeOrigin: true,
         secure: false,
         logLevel: 'silent',
-        pathRewrite: { '^/go/[^/]+': '' }, // Strips the proxy prefix out cleanly
-        onError: (err, req, res) => res.status(502).send("Target server connection timeout or host offline.")
+        // Forces all sub-requests (scripts, images, games) to stay mapped inside the proxy loop instead of crashing
+        router: (req) => {
+            if (req.query && req.query.url) {
+                return req.query.url;
+            }
+            return targetUrl;
+        },
+        onError: (err, req, res) => res.status(502).send("Target application connection timeout or host offline.")
     })(req, res, next);
 });
 
-// Dynamic port fallback handler
+// Dynamic port handling configuration
 const server = app.listen(PORT, () => console.log(`Server live on port ${PORT}`));
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
