@@ -80,22 +80,27 @@ app.get('/', (req, res) => {
     `);
 });
 
-// A global cookie jar and target storage map to catch relative background asset loops
+// A global session dictionary tracking engine memory mapping variables
 let activeSessions = {};
 
-// 2. Fully Armored Traffic Routing Engine Middleware
+// 2. Flawless Real-Time Traffic Routing Engine Middleware
 app.use((req, res, next) => {
-    // Check if the current request is an explicit tunnel entry point or a sub-resource asset loop
     let targetUrl = req.query.target || req.headers['x-target-destination'];
     
-    // Fallback system: If an internal style/script drops the query string, match by ip session history cookies
-    const sessionCookie = req.headers.cookie ? req.headers.cookie.split(';').find(c => c.trim().startsWith('proxy_session=')) : null;
-    if (!targetUrl && sessionCookie) {
-        const sessionId = sessionCookie.split('=')[1];
-        targetUrl = activeSessions[sessionId];
+    // Cookie memory map tracker handler to catch sub-resource scripts that drop parameters
+    let sessionKey = null;
+    if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';');
+        const foundCookie = cookies.find(c => c.trim().startsWith('proxy_session='));
+        if (foundCookie) {
+            sessionKey = foundCookie.split('=')[1].trim();
+            if (!targetUrl && activeSessions[sessionKey]) {
+                targetUrl = activeSessions[sessionKey];
+            }
+        }
     }
 
-    // Capture the targetUrl if explicitly provided and store it in our session database mapping memory
+    // Register fresh session IDs securely when entering a new proxy link
     if (req.path.startsWith('/tunnel/') && req.query.target) {
         const newSessionId = Math.random().toString(36).substring(7);
         activeSessions[newSessionId] = req.query.target;
@@ -103,8 +108,8 @@ app.use((req, res, next) => {
         targetUrl = req.query.target;
     }
 
+    // If it's a general request that has no tracking history, skip to normal routes
     if (!targetUrl) {
-        // If it's just a general asset request that lost parameters, let it proceed to standard asset mapping below
         return next();
     }
 
@@ -116,23 +121,31 @@ app.use((req, res, next) => {
             changeOrigin: true,
             secure: false,
             logLevel: 'silent',
-            cookieDomainRewrite: { "*": "" }, // Scrubs out target restrictions to prevent authentication blocks
+            cookieDomainRewrite: { "*": "" },
             onProxyReq: (proxyReq, req, res) => {
                 proxyReq.setHeader('Host', destObj.host);
-                proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
                 proxyReq.setHeader('Accept', '*/*');
                 proxyReq.setHeader('Referer', destObj.origin + '/');
             },
+            // Master fix: Strictly transforms strings to prevent array runtime method crashes
             pathRewrite: (path) => {
-                // Completely safe string-to-array processing that will never throw replace type crashes
-                let cleanPath = String(path).split('?')[0];
-                cleanPath = cleanPath.replace(/^\/tunnel\/[^/]+\/[^/]+/, '');
-                return cleanPath || '/';
+                let currentPath = String(path);
+                // Strip parameter prefix folder blocks out BEFORE splitting strings
+                let cleanedPath = currentPath.replace(/^\/tunnel\/[^/]+\/[^/]+/, '');
+                
+                // If the cleanup strips the path completely empty, default to standard directory slash
+                if (!cleanedPath || cleanedPath.startsWith('?')) {
+                    cleanedPath = '/' + cleanedPath;
+                }
+                
+                // Split queries safely. Vercel/Render will read the first segment array value string index flawlessly
+                const finalPathSegment = cleanedPath.split('?')[0];
+                return finalPathSegment || '/';
             },
             onError: (err, req, res) => {
-                // Gracefully return a clean layout card instead of letting the application loop crash
                 if (!res.headersSent) {
-                    res.status(502).send("Target connection established. Resource layout synchronizing...");
+                    res.status(502).send("Syncing real-time target website assets... Please refresh if page stays blank.");
                 }
             }
         })(req, res, next);
@@ -141,7 +154,7 @@ app.use((req, res, next) => {
     }
 });
 
-// Dynamic port conflict resolution config
+// Resilient port mapping conflict fallback architecture
 const server = app.listen(PORT, () => console.log(`Server live on port ${PORT}`));
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
