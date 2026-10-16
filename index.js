@@ -102,9 +102,10 @@ app.use('/tunnel/:fld/:file', (req, res, next) => {
                 proxyReq.setHeader('Accept-Language', 'en-US,en;q=0.5');
                 proxyReq.setHeader('Connection', 'keep-alive');
             },
-            // Strip out the custom path folders cleanly so it loads the root target page
+                       // Corrected string processing to prevent crashes and loop-backs
             pathRewrite: (path, req) => {
-                return req.url.split('?')[0].replace(/^\/tunnel\/[^/]+\/[^/]+/, '') || '/';
+                const cleanPath = path.split('?')[0];
+                return cleanPath.replace(/^\/tunnel\/[^/]+\/[^/]+/, '') || '/';
             },
             onError: (err, req, res) => {
                 res.status(502).send("Target host blocked connection or server timed out.");
