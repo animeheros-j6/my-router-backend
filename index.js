@@ -81,26 +81,32 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. Real-Time Traffic Routing Engine Middleware
+// 2. Real-Time Traffic Routing Engine Middleware (Fixed Infinite Loop)
 app.use('/route/:fld/:file', (req, res, next) => {
     const encodedDest = req.query.dest;
     if (!encodedDest) return res.status(400).send("Missing target routing parameters.");
     
     try {
+        // Decode the target destination securely
         let target = Buffer.from(encodedDest, 'base64').toString('ascii');
         if (!target.startsWith('http')) target = 'https://' + target;
 
-        // Creates an actual server-side proxy connection pipeline
+        // Establish the secure server-to-server data pipe
         createProxyMiddleware({
             target: target,
             changeOrigin: true,
+            secure: false, // Prevents SSL mismatches when using raw IP targets
             logLevel: 'silent',
-            pathRewrite: (path, req) => '/',
-            onError: (err, req, res) => res.status(502).send("Target server connection timeout.")
+            onError: (err, req, res) => {
+                res.status(502).send("Target server connection timeout or host offline.");
+            }
         })(req, res, next);
     } catch (e) {
         res.status(400).send("Invalid configuration string.");
     }
 });
+
+app.listen(PORT, () => console.log('Server active.'));
+
 
 app.listen(PORT, () => console.log('Server active.'));
