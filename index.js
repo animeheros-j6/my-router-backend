@@ -106,7 +106,19 @@ app.use('/route/:fld/:file', (req, res, next) => {
     }
 });
 
-app.listen(PORT, () => console.log('Server active.'));
+// Dynamic port binding to prevent conflicts
+const server = app.listen(PORT, () => {
+    console.log(`Server successfully active on port ${PORT}`);
+});
 
-
-app.listen(PORT, () => console.log('Server active.'));
+server.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') {
+        console.log('Port conflict detected. Automatically switching to alternative backup port...');
+        setTimeout(() => {
+            server.close();
+            app.listen(PORT + 1, () => {
+                console.log(`Server successfully active on backup port ${PORT + 1}`);
+            });
+        }, 1000);
+    }
+});
