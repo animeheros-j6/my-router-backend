@@ -61,8 +61,8 @@ app.get('/', (req, res) => {
                 const frag = document.createDocumentFragment();
                 
                 for(let i=0; i<count; i++) {
-                    // Generates clean parameters using standard routing paths
-                    const lnk = base + "/service?url=" + encodeURIComponent("https://" + target) + "&id=" + getRandomString(6);
+                    // Unique paths routing to the target parameter
+                    const lnk = base + "/tunnel/" + getRandomString(6) + "/" + getRandomString(6) + "?target=" + encodeURIComponent("https://" + target);
                     txt += (i+1) + ". " + lnk + "\\n";
                     if(i < 100) {
                         const d = document.createElement('div'); d.className = 'link-item';
@@ -81,28 +81,41 @@ app.get('/', (req, res) => {
     `);
 });
 
-// 2. Real-Time Traffic Routing Engine (Clean Asset Re-Mapping Configuration)
-app.use('/service', (req, res, next) => {
-    const targetUrl = req.query.url;
-    if (!targetUrl) return res.status(400).send("Missing target routing URL configuration parameter.");
+// 2. Browser-Imitating Traffic Routing Engine
+app.use('/tunnel/:fld/:file', (req, res, next) => {
+    const targetUrl = req.query.target;
+    if (!targetUrl) return res.status(400).send("Missing routing destination.");
 
-    createProxyMiddleware({
-        target: targetUrl,
-        changeOrigin: true,
-        secure: false,
-        logLevel: 'silent',
-        // Forces all sub-requests (scripts, images, games) to stay mapped inside the proxy loop instead of crashing
-        router: (req) => {
-            if (req.query && req.query.url) {
-                return req.query.url;
+    try {
+        const destObj = new URL(targetUrl);
+        
+        createProxyMiddleware({
+            target: destObj.origin,
+            changeOrigin: true,
+            secure: false,
+            logLevel: 'silent',
+            // Mask headers to make Render look like a standard Google Chrome user browser
+            onProxyReq: (proxyReq, req, res) => {
+                proxyReq.setHeader('Host', destObj.host);
+                proxyReq.setHeader('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                proxyReq.setHeader('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8');
+                proxyReq.setHeader('Accept-Language', 'en-US,en;q=0.5');
+                proxyReq.setHeader('Connection', 'keep-alive');
+            },
+            // Strip out the custom path folders cleanly so it loads the root target page
+            pathRewrite: (path, req) => {
+                return req.url.split('?')[0].replace(/^\/tunnel\/[^/]+\/[^/]+/, '') || '/';
+            },
+            onError: (err, req, res) => {
+                res.status(502).send("Target host blocked connection or server timed out.");
             }
-            return targetUrl;
-        },
-        onError: (err, req, res) => res.status(502).send("Target application connection timeout or host offline.")
-    })(req, res, next);
+        })(req, res, next);
+    } catch(e) {
+        res.status(400).send("Invalid target URL format.");
+    }
 });
 
-// Dynamic port handling configuration
+// Dynamic port conflict resolution config
 const server = app.listen(PORT, () => console.log(`Server live on port ${PORT}`));
 server.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
