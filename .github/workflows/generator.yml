@@ -1,0 +1,59 @@
+name: Dynamic Link Provisioning Engine
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ip:
+        description: 'Target IP or Domain (e.g., 51.222.141.36)'
+        required: true
+        default: '51.222.141.36'
+      link_count:
+        description: 'Quantity of Links to Provision'
+        required: true
+        default: '10'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository Base
+        uses: actions/checkout@v4
+
+      - name: Execute Mass Link Randomization Engine
+        run: |
+          TARGET="${{ github.event.inputs.target_ip }}"
+          COUNT=${{ github.event.inputs.link_count }}
+          
+          # Clean up input URLs safely
+          CLEAN_TARGET=$(echo "$TARGET" | sed -e 's/https:\/\///' -e 's/http:\/\///')
+          
+          echo "=== PROVISIONED DIVERSE GATEWAYS FOR: $CLEAN_TARGET ===" > links.txt
+          echo "" >> links.txt
+          
+          # Clean public developer gateways that don't block GitHub nodes
+          GATEWAYS=(
+            "https://allorigins.win"
+            "https://corsproxy.io?"
+            "https://authing.cn"
+          )
+          
+          for ((i=1; i<=COUNT; i++)); do
+            # Pick a rotating gateway from the array map list
+            GW_INDEX=$((i % ${#GATEWAYS[@]}))
+            BASE_GW="${GATEWAYS[$GW_INDEX]}"
+            
+            # Generate highly unique crypto random string hashes
+            RAND1=$(head /dev/urandom | tr -dc a-z0-9 | head -c 8)
+            RAND2=$(head /dev/urandom | tr -dc a-z0-9 | head -c 12)
+            
+            FINAL_URL="${BASE_GW}https%3A%2F%2F${CLEAN_TARGET}&session_id=${RAND1}&auth_token=${RAND2}"
+            echo "$i. $FINAL_URL" >> links.txt
+          done
+          
+          echo "✅ Link database batch execution completed."
+
+      - name: Upload Finished Downloadable Text File
+        uses: actions/upload-artifact@v4
+        with:
+          name: provisioned-links-package
+          path: links.txt
